@@ -1,0 +1,184 @@
+/****** Script for SelectTopNRows command from SSMS  ******/
+  select * 
+  from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+  --standardize Date format
+
+  select SaleDate, saledatecoverted
+  from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+  Alter Table Nashvillhousingdata
+  Add saledatecoverted Date;
+
+  Update [Protfolioproject].[dbo].[Nashvillhousingdata]
+  set saledatecoverted = convert(Date,SaleDate);
+
+--Populate Property Address Date 
+
+--Get all the data where property address is null 
+
+Select *
+from [Protfolioproject].[dbo].[Nashvillhousingdata]
+where PropertyAddress is null;
+
+-- when parcel id is same for two rows then property address is also same.
+
+Select *
+from [Protfolioproject].[dbo].[Nashvillhousingdata]
+order by ParcelID;
+
+-- It gives the rows having null value in "a" property address which have unequal uniqueID and equal parcelID 
+
+select a.ParcelID, a.PropertyAddress, b.ParcelID , b.PropertyAddress
+from [Protfolioproject].[dbo].[Nashvillhousingdata] a
+join [Protfolioproject].[dbo].[Nashvillhousingdata] b
+	on a.ParcelID = b.ParcelID
+	and a.[UniqueID ] <> b.[UniqueID ]
+where a.PropertyAddress is null;
+
+--only query ISNULL(a.rowname,b.rowname) is used to populate the null value with b.rowname value  
+
+select a.ParcelID, a.PropertyAddress, b.ParcelID , b.PropertyAddress, isnull(a.PropertyAddress,b.PropertyAddress)
+from [Protfolioproject].[dbo].[Nashvillhousingdata] a
+join [Protfolioproject].[dbo].[Nashvillhousingdata] b
+	on a.ParcelID = b.ParcelID
+	and a.[UniqueID ] <> b.[UniqueID ]
+where a.PropertyAddress is null;
+
+-- It update the value
+
+update a
+set PropertyAddress = isnull(a.PropertyAddress,b.PropertyAddress)
+from [Protfolioproject].[dbo].[Nashvillhousingdata] a
+join [Protfolioproject].[dbo].[Nashvillhousingdata] b
+	on a.ParcelID = b.ParcelID
+	and a.[UniqueID ] <> b.[UniqueID ]
+where a.PropertyAddress is null;
+
+-- Breaking out Address into Individual Columns (Address, City , State)
+
+Select PropertyAddress
+from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+-- substring() is used to get the specific string from the row according to there postion.
+-- CHARIDEX() is used to return the index of the specific character 
+select 
+SUBSTRING( PropertyAddress, 1 , CHARINDEX(',' , PropertyAddress)-1) as Address
+,SUBSTRING(PropertyAddress,CHARINDEX(',' , PropertyAddress) +1 , len(PropertyAddress)) as City
+from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+
+-- Now new coloumn is add and seprate city name and state name
+Alter Table [Protfolioproject].[dbo].[Nashvillhousingdata]
+Add  PropertySplitAddress Nvarchar(225);
+
+Update [Protfolioproject].[dbo].[Nashvillhousingdata]
+set PropertySplitAddress = SUBSTRING( PropertyAddress, 1 , CHARINDEX(',' , PropertyAddress)-1);
+
+ Alter Table [Protfolioproject].[dbo].[Nashvillhousingdata]
+ Add  PropertySplitcity Nvarchar(225);
+
+Update [Protfolioproject].[dbo].[Nashvillhousingdata]
+ set PropertySplitcity = SUBSTRING(PropertyAddress,CHARINDEX(',' , PropertyAddress) +1 , len(PropertyAddress));
+
+ Select PropertySplitAddress , PropertySplitcity
+from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+-- Now Spilt the owner address
+
+Select OwnerAddress
+from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+-- PARSENAME() takes on "." to separate, So comma is replace by the dot first.
+SELECT
+PARSENAME(Replace(OwnerAddress, ',','.'),3),
+PARSENAME(Replace(OwnerAddress, ',','.'),2),
+PARSENAME(Replace(OwnerAddress, ',','.'),1)
+from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+Alter Table [Protfolioproject].[dbo].[Nashvillhousingdata]
+Add  OwnerSplitAddress Nvarchar(225);
+
+Update [Protfolioproject].[dbo].[Nashvillhousingdata]
+set OwnerSplitAddress = PARSENAME(Replace(OwnerAddress, ',','.'),3);
+
+ Alter Table [Protfolioproject].[dbo].[Nashvillhousingdata]
+ Add  OwnerSplitCity  Nvarchar(225);
+
+Update [Protfolioproject].[dbo].[Nashvillhousingdata]
+ set OwnerSplitCity = PARSENAME(Replace(OwnerAddress, ',','.'),2);
+
+Alter Table [Protfolioproject].[dbo].[Nashvillhousingdata]
+ Add  OwnerSplitState Nvarchar(225);
+
+Update [Protfolioproject].[dbo].[Nashvillhousingdata]
+ set OwnerSplitState = PARSENAME(Replace(OwnerAddress, ',','.'),1);
+
+SELECT * 
+from [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+-- Change Y and N to Yes and No in "Solid as Vacant" field
+
+Select Distinct(SoldAsVacant), count(SoldAsVacant)
+from [Protfolioproject].[dbo].[Nashvillhousingdata]
+Group by SoldAsVacant
+order by 2;
+
+select SoldAsVacant , 
+CASE 
+	when SoldAsVacant = 'Y' THEN 'Yes'
+	When SoldAsVacant = 'N' THEN 'No'
+	Else SoldAsVacant
+	END
+From [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+update [Protfolioproject].[dbo].[Nashvillhousingdata]
+SET SoldAsVacant =  
+CASE 
+	when SoldAsVacant = 'Y' THEN 'Yes'
+	When SoldAsVacant = 'N' THEN 'No'
+	Else SoldAsVacant
+	END
+From [Protfolioproject].[dbo].[Nashvillhousingdata];
+
+
+-- Remove Duplicates
+
+ With RowNumctc AS (
+ select *,
+	Row_number() OVER (
+	Partition by ParcelID,
+				PropertyAddress,
+				SalePrice,
+				SaleDate,
+				LegalReference
+				Order by
+					UniqueID
+					) row_num
+From [Protfolioproject].[dbo].[Nashvillhousingdata]
+)
+select *
+from RowNumctc
+Where row_num > 1
+Order by PropertyAddress;
+
+-- Delete the duplicate rows from the coulumn
+ With RowNumctc AS (
+ select *,
+	Row_number() OVER (
+	Partition by ParcelID,
+				PropertyAddress,
+				SalePrice,
+				SaleDate,
+				LegalReference
+				Order by
+					UniqueID
+					) row_num
+From [Protfolioproject].[dbo].[Nashvillhousingdata]
+)
+delete
+from RowNumctc
+Where row_num > 1
+--Order by PropertyAddress
+;
+
